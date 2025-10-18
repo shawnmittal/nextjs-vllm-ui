@@ -1,0 +1,48 @@
+kind: ZarfPackageConfig
+metadata:
+  name: nextjs-vllm-ui
+  description: "Fully-featured & beautiful web interface for vLLM & Ollama"
+  version: "1.0.0"
+  url: "https://github.com/shawnmittal/nextjs-vllm-ui"
+  authors: "Shawn Mittal"
+  documentation: "https://github.com/shawnmittal/nextjs-vllm-ui/blob/main/README.md"
+
+variables:
+  - name: VLLM_URL
+    description: "URL of the vLLM or Ollama API endpoint"
+    default: "http://host.docker.internal:8000"
+  - name: VLLM_API_KEY
+    description: "API key for vLLM (optional)"
+    default: ""
+  - name: VLLM_TOKEN_LIMIT
+    description: "Token limit for the model"
+    default: "8192"
+  - name: VLLM_MODEL
+    description: "Model name (required for Ollama, optional for vLLM)"
+    default: ""
+  - name: REPLICAS
+    description: "Number of replicas"
+    default: "1"
+
+components:
+  - name: nextjs-vllm-ui-app
+    required: true
+    description: "Next.js vLLM UI application"
+    images:
+      - "nextjs-vllm-ui:latest"
+    manifests:
+      - name: nextjs-vllm-ui-manifests
+        namespace: nextjs-vllm-ui
+        files:
+          - manifests/configmap.yaml
+          - manifests/deployment.yaml
+          - manifests/service.yaml
+    actions:
+      onDeploy:
+        after:
+          - wait:
+              cluster:
+                kind: deployment
+                name: nextjs-vllm-ui
+                namespace: nextjs-vllm-ui
+                condition: available

@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextjs-vllm-ui
+  labels:
+    app: nextjs-vllm-ui
+spec:
+  replicas: ###ZARF_VAR_REPLICAS###
+  selector:
+    matchLabels:
+      app: nextjs-vllm-ui
+  template:
+    metadata:
+      labels:
+        app: nextjs-vllm-ui
+    spec:
+      containers:
+      - name: nextjs-vllm-ui
+        image: nextjs-vllm-ui:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: nextjs-vllm-ui-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
