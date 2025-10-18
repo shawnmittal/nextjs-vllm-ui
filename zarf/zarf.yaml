@@ -10,10 +10,12 @@ metadata:
 variables:
   - name: VLLM_URL
     description: "URL of the vLLM or Ollama API endpoint"
-    default: "http://host.docker.internal:8000"
+    default: "http://vllm.vllm.svc.cluster.local:8000"
+    prompt: true
   - name: VLLM_API_KEY
     description: "API key for vLLM (optional)"
     default: ""
+    prompt: true
   - name: VLLM_TOKEN_LIMIT
     description: "Token limit for the model"
     default: "8192"
