@@ -19,6 +19,7 @@ variables:
   - name: VLLM_TOKEN_LIMIT
     description: "Token limit for the model"
     default: "8192"
+    prompt: true
   - name: VLLM_MODEL
     description: "Model name (required for Ollama, optional for vLLM)"
     default: ""
