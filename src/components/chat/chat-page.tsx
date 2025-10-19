@@ -9,7 +9,7 @@ import useLocalStorageState from "use-local-storage-state";
 import { v4 as uuidv4 } from "uuid";
 
 import { ChatLayout } from "@/components/chat/chat-layout";
-import { ChatOptions } from "@/components/chat/chat-options";
+import { ChatOptions, DEFAULT_CHAT_OPTIONS } from "@/components/chat/chat-options";
 import { basePath } from "@/lib/utils";
 
 interface ChatPageProps {
@@ -17,6 +17,13 @@ interface ChatPageProps {
   setChatId: React.Dispatch<React.SetStateAction<string>>;
 }
 export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
+  const [chatOptions, setChatOptions] = useLocalStorageState<ChatOptions>(
+    "chatOptions",
+    {
+      defaultValue: DEFAULT_CHAT_OPTIONS,
+    }
+  );
+
   const {
     messages,
     input,
@@ -30,19 +37,23 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
     api: basePath + "/api/chat",
     streamMode: "stream-data",
     onError: (error) => {
-      toast.error("Something went wrong: " + error);
+      // Parse error to provide better user feedback
+      let errorMessage = "Something went wrong";
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.code === "NOT_CONFIGURED" || errorData.code === "API_NOT_CONFIGURED") {
+          errorMessage = "Please configure API settings first";
+        } else if (errorData.code === "NO_MODEL_SELECTED") {
+          errorMessage = "Please wait for model to be selected or check your API connection";
+        } else {
+          errorMessage = errorData.error || error.message;
+        }
+      } catch {
+        errorMessage = error.message || errorMessage;
+      }
+      toast.error(errorMessage);
     },
   });
-  const [chatOptions, setChatOptions] = useLocalStorageState<ChatOptions>(
-    "chatOptions",
-    {
-      defaultValue: {
-        selectedModel: "",
-        systemPrompt: "",
-        temperature: 0.9,
-      },
-    }
-  );
 
   React.useEffect(() => {
     if (chatId) {
@@ -67,6 +78,18 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Check if API is configured before sending
+    if (!chatOptions.apiUrl) {
+      toast.error("Please configure the API URL in settings before sending messages");
+      return;
+    }
+
+    // Check if model is selected
+    if (!chatOptions.selectedModel) {
+      toast.error("Please wait for model to be selected or check your API connection");
+      return;
+    }
+
     if (messages.length === 0) {
       // Generate a random id for the chat
       const id = uuidv4();
@@ -75,11 +98,18 @@ export default function ChatPage({ chatId, setChatId }: ChatPageProps) {
 
     setMessages([...messages]);
 
-    // Prepare the options object with additional body data, to pass the model.
+    // Prepare the options object with additional body data, including API configuration
     const requestOptions: ChatRequestOptions = {
       options: {
         body: {
-          chatOptions: chatOptions,
+          chatOptions: {
+            ...chatOptions,
+            // Ensure API configuration is included
+            apiUrl: chatOptions.apiUrl,
+            apiKey: chatOptions.apiKey,
+            maxTokens: chatOptions.maxTokens,
+            topP: chatOptions.topP,
+          },
         },
       },
     };

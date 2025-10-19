@@ -109,43 +109,84 @@ export async function POST(req: Request) {
   // export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const { messages, chatOptions } = await req.json();
+    
+    // Extract API configuration from chatOptions or use env vars as fallback
+    const apiUrl = chatOptions?.apiUrl || process.env.VLLM_URL;
+    const apiKey = chatOptions?.apiKey || process.env.VLLM_API_KEY;
+    const maxTokens = chatOptions?.maxTokens || 
+                      (process.env.VLLM_TOKEN_LIMIT ? parseInt(process.env.VLLM_TOKEN_LIMIT) : 4096);
+    
+    // Validate configuration
+    if (!apiUrl) {
+      return NextResponse.json(
+        { 
+          error: "API URL not configured. Please set it in settings.", 
+          code: "API_NOT_CONFIGURED" 
+        },
+        { status: 503 }
+      );
+    }
+    
     if (!chatOptions.selectedModel || chatOptions.selectedModel === "") {
-      throw new Error("Selected model is required");
+      return NextResponse.json(
+        { 
+          error: "No model selected. Please wait for connection or check settings.", 
+          code: "NO_MODEL_SELECTED" 
+        },
+        { status: 400 }
+      );
     }
-
-    const baseUrl = process.env.VLLM_URL;
-    if (!baseUrl) {
-      throw new Error("VLLM_URL is not set");
-    }
-    const apiKey = process.env.VLLM_API_KEY;
-
-    const tokenLimit = process.env.VLLM_TOKEN_LIMIT
-      ? parseInt(process.env.VLLM_TOKEN_LIMIT)
-      : 4096;
 
     const formattedMessages = formatMessages(
       addSystemMessage(messages, chatOptions.systemPrompt),
-      tokenLimit
+      maxTokens
     );
 
-    // Call the language model
-    const customOpenai = createOpenAI({
-      baseUrl: baseUrl + "/v1",
-      apiKey: apiKey ?? "",
-    });
+    try {
+      // Create OpenAI client with dynamic configuration
+      const customOpenai = createOpenAI({
+        baseUrl: apiUrl + "/v1",
+        apiKey: apiKey ?? "",
+      });
 
-    const result = await streamText({
-      model: customOpenai(chatOptions.selectedModel),
-      messages: formattedMessages,
-      temperature: chatOptions.temperature,
-      // async onFinish({ text, toolCalls, toolResults, usage, finishReason }) {
-      //   // implement your own logic here, e.g. for storing messages
-      //   // or recording token usage
-      // },
-    });
+      const result = await streamText({
+        model: customOpenai(chatOptions.selectedModel),
+        messages: formattedMessages,
+        temperature: chatOptions.temperature ?? 0.9,
+        topP: chatOptions.topP ?? 0.95,
+        maxTokens: maxTokens,
+      });
 
-    // Respond with the stream
-    return result.toAIStreamResponse();
+      // Respond with the stream
+      return result.toAIStreamResponse();
+      
+    } catch (apiError: any) {
+      console.error("vLLM API error:", apiError);
+      
+      // Handle specific error types
+      if (apiError.message?.includes("Failed to fetch") || 
+          apiError.message?.includes("ECONNREFUSED")) {
+        return NextResponse.json(
+          { 
+            error: "Cannot connect to API server. Please check your settings.", 
+            code: "CONNECTION_FAILED" 
+          },
+          { status: 503 }
+        );
+      }
+      
+      if (apiError.status === 401) {
+        return NextResponse.json(
+          { 
+            error: "Authentication failed. Please check your API key.", 
+            code: "AUTH_FAILED" 
+          },
+          { status: 401 }
+        );
+      }
+      
+      throw apiError;
+    }
 
   } catch (error) {
     console.error(error);

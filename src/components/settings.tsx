@@ -3,6 +3,7 @@
 import ClearChatsButton from "./settings-clear-chats";
 import SettingsThemeToggle from "./settings-theme-toggle";
 import SystemPrompt, { SystemPromptProps } from "./system-prompt";
+import ApiSettings from "./settings-api";
 import { Input } from "./ui/input";
 
 const TemperatureSlider = ({
@@ -59,6 +60,9 @@ export default function Settings({
 }: SystemPromptProps) {
   return (
     <>
+      {/* API Settings - Priority placement */}
+      <ApiSettings chatOptions={chatOptions} setChatOptions={setChatOptions} />
+      
       <SystemPrompt chatOptions={chatOptions} setChatOptions={setChatOptions} />
       <TemperatureSlider
         chatOptions={chatOptions}

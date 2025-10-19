@@ -7,7 +7,11 @@ WORKDIR /opt/app
 # Copy only the necessary files for Yarn
 COPY .yarnrc.yml package.json yarn.lock ./
 
-RUN corepack enable && yarn install --immutable
+# Enable corepack and install dependencies
+# Try immutable install first, fallback to updating lockfile if needed
+RUN corepack enable && \
+    (yarn install --immutable || \
+     (echo "Lockfile out of sync, updating..." && yarn install))
 # patch logging for requestHandler
 RUN sed -Ei \
     -e '/await requestHandler/iconst __start = new Date;' \
@@ -19,7 +23,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV VLLM_URL=""
 ENV VLLM_API_KEY=""
 
+# Copy the rest of the application files
 COPY . .
+
+# Install again to ensure workspace is properly linked after copying all files
+RUN yarn install
+
 RUN yarn build
 
 # Production image, copy all the files and run next

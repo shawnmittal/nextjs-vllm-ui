@@ -8,6 +8,7 @@ import {
   DotFilledIcon,
   HamburgerMenuIcon,
   InfoCircledIcon,
+  ExclamationTriangleIcon,
 } from "@radix-ui/react-icons";
 import { Message } from "ai/react";
 import { toast } from "sonner";
@@ -46,35 +47,94 @@ export default function ChatTopbar({
   const currentModel = chatOptions && chatOptions.selectedModel;
   const [tokenLimit, setTokenLimit] = React.useState<number>(4096);
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [connectionStatus, setConnectionStatus] = React.useState<
+    "checking" | "connected" | "failed" | "not-configured"
+  >("checking");
 
   const fetchData = async () => {
     if (!hasMounted) {
       return null;
     }
+
+    // Check if API is configured
+    if (!chatOptions.apiUrl) {
+      setConnectionStatus("not-configured");
+      // Don't try to fetch models if no API URL is configured
+      return;
+    }
+
     try {
-      const res = await fetch(basePath + "/api/models");
+      setConnectionStatus("checking");
+      
+      // Pass API configuration to the models endpoint
+      const res = await fetch(basePath + "/api/models", {
+        method: "POST", // Change to POST to send config
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiUrl: chatOptions.apiUrl,
+          apiKey: chatOptions.apiKey,
+        }),
+      });
 
       if (!res.ok) {
-        const errorResponse = await res.json();
+        const errorResponse = await res.json().catch(() => ({ error: "Unknown error" }));
         const errorMessage = `Connection to vLLM server failed: ${errorResponse.error} [${res.status} ${res.statusText}]`;
-        throw new Error(errorMessage);
+        setError(errorMessage);
+        setConnectionStatus("failed");
+        
+        // Only show toast if it's a new error (not on every re-render)
+        if (connectionStatus !== "failed") {
+          toast.error(errorMessage);
+        }
+        
+        setChatOptions({ ...chatOptions, selectedModel: undefined });
+        return;
       }
 
       const data = await res.json();
       // Extract the "name" field from each model object and store them in the state
       const modelNames = data.data.map((model: any) => model.id);
-      // save the first and only model in the list as selectedModel in localstorage
-      setChatOptions({ ...chatOptions, selectedModel: modelNames[0] });
-    } catch (error) {
+      
+      if (modelNames.length > 0) {
+        setConnectionStatus("connected");
+        setError(undefined);
+        
+        // Only update selectedModel if it's not already set
+        if (!chatOptions.selectedModel || !modelNames.includes(chatOptions.selectedModel)) {
+          setChatOptions({ ...chatOptions, selectedModel: modelNames[0] });
+        }
+      } else {
+        setConnectionStatus("failed");
+        setError("No models available");
+        setChatOptions({ ...chatOptions, selectedModel: undefined });
+      }
+    } catch (error: any) {
+      setConnectionStatus("failed");
+      const errorMsg = error?.message || "Failed to fetch models";
+      setError(errorMsg);
       setChatOptions({ ...chatOptions, selectedModel: undefined });
-      toast.error(error as string);
+      
+      // Only show toast for unexpected errors
+      if (!errorMsg.includes("not configured")) {
+        toast.error(errorMsg);
+      }
     }
   };
 
   useEffect(() => {
     fetchData();
-    getTokenLimit(basePath).then((limit) => setTokenLimit(limit));
-  }, [hasMounted]);
+  }, [hasMounted, chatOptions.apiUrl, chatOptions.apiKey]); // Re-fetch when API settings change
+
+  useEffect(() => {
+    // Get token limit from chatOptions or fetch from API
+    if (chatOptions.maxTokens) {
+      setTokenLimit(chatOptions.maxTokens);
+    } else {
+      getTokenLimit(basePath).then((limit) => setTokenLimit(limit));
+    }
+  }, [hasMounted, chatOptions.maxTokens]);
 
   if (!hasMounted) {
     return (
@@ -87,31 +147,26 @@ export default function ChatTopbar({
 
   const chatTokens = messages.length > 0 ? encodeChat(messages) : 0;
 
-  return (
-    <div className="md:w-full flex px-4 py-4 items-center justify-between md:justify-center">
-      <Sheet>
-        <SheetTrigger>
-          <div className="flex items-center gap-2">
-            <HamburgerMenuIcon className="md:hidden w-5 h-5" />
-          </div>
-        </SheetTrigger>
-        <SheetContent side="left">
-          <div>
-            <Sidebar
-              chatId={chatId || ""}
-              setChatId={setChatId}
-              isCollapsed={false}
-              isMobile={false}
-              chatOptions={chatOptions}
-              setChatOptions={setChatOptions}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <div className="flex justify-center md:justify-between gap-4 w-full">
-        <div className="gap-1 flex items-center">
-          {currentModel !== undefined && (
+  // Render connection status indicators
+  const renderConnectionStatus = () => {
+    switch (connectionStatus) {
+      case "checking":
+        return (
+          <>
+            <DotFilledIcon className="w-4 h-4 text-blue-500" />
+            <span className="text-xs">Connecting...</span>
+          </>
+        );
+      case "not-configured":
+        return (
+          <>
+            <ExclamationTriangleIcon className="w-4 h-4 text-yellow-500" />
+            <span className="text-xs">API not configured</span>
+          </>
+        );
+      case "connected":
+        if (currentModel) {
+          return (
             <>
               {isLoading ? (
                 <DotFilledIcon className="w-4 h-4 text-blue-500" />
@@ -137,13 +192,46 @@ export default function ChatTopbar({
                 {isLoading ? "Generating.." : "Ready"}
               </span>
             </>
-          )}
-          {currentModel === undefined && (
-            <>
-              <CrossCircledIcon className="w-4 h-4 text-red-500" />
-              <span className="text-xs">Connection to vLLM server failed</span>
-            </>
-          )}
+          );
+        }
+        return null;
+      case "failed":
+        return (
+          <>
+            <CrossCircledIcon className="w-4 h-4 text-red-500" />
+            <span className="text-xs">Connection failed</span>
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="md:w-full flex px-4 py-4 items-center justify-between md:justify-center">
+      <Sheet>
+        <SheetTrigger>
+          <div className="flex items-center gap-2">
+            <HamburgerMenuIcon className="md:hidden w-5 h-5" />
+          </div>
+        </SheetTrigger>
+        <SheetContent side="left">
+          <div>
+            <Sidebar
+              chatId={chatId || ""}
+              setChatId={setChatId}
+              isCollapsed={false}
+              isMobile={false}
+              chatOptions={chatOptions}
+              setChatOptions={setChatOptions}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <div className="flex justify-center md:justify-between gap-4 w-full">
+        <div className="gap-1 flex items-center">
+          {renderConnectionStatus()}
         </div>
         <div className="flex items-end gap-2">
           {chatTokens > tokenLimit && (
