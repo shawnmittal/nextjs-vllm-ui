@@ -68,9 +68,17 @@ export default function ApiSettings({
     setChatOptions({ ...chatOptions, maxTokens: Math.max(1, Math.min(100000, value)) });
   };
 
+  const handleOmitMaxTokensChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatOptions({ ...chatOptions, omitMaxTokens: e.target.checked });
+  };
+
   const handleTopPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0.95;
     setChatOptions({ ...chatOptions, topP: Math.min(1, Math.max(0, value)) });
+  };
+
+  const handleOmitTopPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatOptions({ ...chatOptions, omitTopP: e.target.checked });
   };
 
   const handleModelChange = (value: string) => {
@@ -368,7 +376,25 @@ export default function ApiSettings({
                   value={chatOptions.maxTokens || 4096}
                   onChange={handleMaxTokensChange}
                   className="text-sm"
+                  disabled={chatOptions.omitMaxTokens}
                 />
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="omit-max-tokens"
+                    checked={chatOptions.omitMaxTokens || false}
+                    onChange={handleOmitMaxTokensChange}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary"
+                  />
+                  <Label htmlFor="omit-max-tokens" className="text-xs font-normal cursor-pointer">
+                    Omit max_tokens parameter (for newer models)
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {chatOptions.omitMaxTokens 
+                    ? "Max tokens parameter will not be sent to the API" 
+                    : "Maximum number of tokens to generate"}
+                </p>
               </div>
 
               {/* Top P */}
@@ -390,9 +416,24 @@ export default function ApiSettings({
                   value={chatOptions.topP || 0.95}
                   onChange={handleTopPChange}
                   className="w-full h-1 bg-gray-200 rounded-sm appearance-none cursor-pointer range-sm dark:bg-gray-700"
+                  disabled={chatOptions.omitTopP}
                 />
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="omit-top-p"
+                    checked={chatOptions.omitTopP || false}
+                    onChange={handleOmitTopPChange}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary"
+                  />
+                  <Label htmlFor="omit-top-p" className="text-xs font-normal cursor-pointer">
+                    Omit top_p parameter
+                  </Label>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Nucleus sampling (0.0 to 1.0)
+                  {chatOptions.omitTopP 
+                    ? "Top P parameter will not be sent to the API" 
+                    : "Nucleus sampling (0.0 to 1.0)"}
                 </p>
               </div>
             </div>

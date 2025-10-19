@@ -88,7 +88,7 @@ export default function ChatList({ messages, isLoading }: ChatListProps) {
             alt="AI"
             width={60}
             height={60}
-            className="h-20 w-14 object-contain dark:invert"
+            className="h-20 w-14 object-contain"
           />
           <p className="text-center text-xl text-muted-foreground">
             How can I help you today?

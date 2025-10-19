@@ -149,13 +149,24 @@ export async function POST(req: Request) {
         apiKey: apiKey ?? "",
       });
 
-      const result = await streamText({
+      // Build the stream options, conditionally including maxTokens
+      const streamOptions: any = {
         model: customOpenai(chatOptions.selectedModel),
         messages: formattedMessages,
         temperature: chatOptions.temperature ?? 0.9,
-        topP: chatOptions.topP ?? 0.95,
-        maxTokens: maxTokens,
-      });
+      };
+
+      // Only include topP if not explicitly omitted
+      if (!chatOptions.omitTopP) {
+        streamOptions.topP = chatOptions.topP ?? 0.95;
+      }
+
+      // Only include maxTokens if not explicitly omitted
+      if (!chatOptions.omitMaxTokens) {
+        streamOptions.maxTokens = maxTokens;
+      }
+
+      const result = await streamText(streamOptions);
 
       // Respond with the stream
       return result.toAIStreamResponse();
