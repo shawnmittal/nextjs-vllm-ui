@@ -30,7 +30,7 @@ To use the web interface, these requisites must be met:
 1. Download [vLLM](https://docs.vllm.ai/en/latest/) and have it running. Or use an OpenAI API compatible endpoint from [Google](https://ai.google.dev/gemini-api/docs/openai) or [OpenAI](https://openai.com).
 2. [Node.js](https://nodejs.org/en/download) (18+), [npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) and [yarn](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) is required.
 
-# Usage 🚀
+# Usage
 
 The easiest way to get started is to use Docker.
 
@@ -43,7 +43,7 @@ docker run --rm -d -p 3000:3000 nextjs-vllm-ui:latest
 Then go to [localhost:3000](http://localhost:3000) and start chatting with your favourite model!
 
 
-# Kubernetes Deployment with Zarf 🚢
+# Kubernetes Deployment with Zarf
 
 [Zarf](https://zarf.dev/) package configuration.
 
@@ -96,3 +96,4 @@ For more detailed instructions, see the [Zarf README](zarf/README.md).
 [shadcn-ui](https://ui.shadcn.com/) - UI component built using Radix UI and Tailwind CSS
 
 [shadcn-chat](https://github.com/jakobhoeg/shadcn-chat) - Chat components for NextJS/React projects
+
