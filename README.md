@@ -1,7 +1,5 @@
 # nextjs-vllm-ui
 
-Forked from https://github.com/jakobhoeg/nextjs-ollama-llm-ui
-
 <div align="center">
   <img src="nextjs-vllm-ui.gif">
 </div>
