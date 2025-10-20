@@ -114,6 +114,50 @@ docker build . -t ghcr.io/yoziru/nextjs-vllm-ui:latest \
   ghcr.io/yoziru/nextjs-vllm-ui:latest
 ```
 
+# Kubernetes Deployment with Zarf 🚢
+
+[Zarf](https://zarf.dev/) package configuration.
+
+## Quick Start
+
+1. **Build the Docker image:**
+   ```bash
+   docker build -t nextjs-vllm-ui:latest .
+   ```
+
+2. **Create the Zarf package:**
+   ```bash
+   cd zarf
+   zarf package create . --confirm
+   ```
+
+3. **Deploy to your cluster:**
+   ```bash
+   zarf package deploy zarf-package-nextjs-vllm-ui-*.tar.zst --confirm
+   ```
+
+## Configuration Options
+
+The Zarf package supports the following configuration variables:
+
+- `VLLM_URL`: URL of your vLLM or Ollama API endpoint (default: `http://vllm.vllm.svc.cluster.local:8000`)
+- `VLLM_API_KEY`: API key for vLLM (optional)
+- `VLLM_TOKEN_LIMIT`: Token limit for the model (default: `8192`)
+- `VLLM_MODEL`: Model name (required for Ollama)
+- `REPLICAS`: Number of application replicas (default: `1`)
+
+**Example deployment with custom settings:**
+
+```bash
+zarf package deploy zarf-package-nextjs-vllm-ui-*.tar.zst \
+  --set VLLM_URL=http://my-vllm-service:8000 \
+  --set VLLM_MODEL=gemma3-27b-it \
+  --set REPLICAS=2 \
+  --confirm
+```
+
+For more detailed instructions, see the [Zarf README](zarf/README.md).
+
 # Tech stack
 
 [NextJS](https://nextjs.org/) - React Framework for the Web
