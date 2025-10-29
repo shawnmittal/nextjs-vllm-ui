@@ -85,6 +85,21 @@ export default function ApiSettings({
     setChatOptions({ ...chatOptions, selectedModel: value });
   };
 
+  const handleBypassModelsCheckChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setChatOptions({ ...chatOptions, bypassModelsCheck: checked });
+    // Clear test result when toggling bypass mode
+    setTestResult(null);
+    // Clear models error when enabling bypass
+    if (checked) {
+      setModelsError(null);
+    }
+  };
+
+  const handleManualModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatOptions({ ...chatOptions, selectedModel: e.target.value });
+  };
+
   // Fetch models function
   const fetchModels = async (showToast: boolean = true) => {
     if (!chatOptions.apiUrl) {
@@ -152,12 +167,12 @@ export default function ApiSettings({
     }
   };
 
-  // Auto-fetch models when connection test succeeds
+  // Auto-fetch models when connection test succeeds (unless bypass mode is enabled)
   useEffect(() => {
-    if (chatOptions.apiUrl && testResult?.success) {
+    if (chatOptions.apiUrl && testResult?.success && !chatOptions.bypassModelsCheck) {
       fetchModels(false); // Don't show toast on auto-fetch
     }
-  }, [testResult?.success]);
+  }, [testResult?.success, chatOptions.bypassModelsCheck]);
 
   const testConnection = async () => {
     if (!chatOptions.apiUrl) {
@@ -168,6 +183,76 @@ export default function ApiSettings({
     setIsTesting(true);
     setTestResult(null);
 
+    // If bypass mode is enabled, test the chat completion endpoint instead
+    if (chatOptions.bypassModelsCheck) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        // Test with a simple completion request
+        const response = await fetch(`${chatOptions.apiUrl}/v1/chat/completions`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(chatOptions.apiKey ? { Authorization: `Bearer ${chatOptions.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: chatOptions.selectedModel || 'test',
+            messages: [{ role: 'user', content: 'test' }],
+            max_tokens: 1,
+            stream: false,
+          }),
+        });
+
+        clearTimeout(timeoutId);
+
+        // For bypass mode, we consider any response (even errors) as a successful connection
+        // as long as the server responds
+        if (response.status === 404) {
+          setTestResult({
+            success: false,
+            message: "Chat completions endpoint not found",
+          });
+          toast.error("Chat completions endpoint not found");
+        } else if (response.status === 401 || response.status === 403) {
+          setTestResult({
+            success: true,
+            message: "Connected! (Authentication may be required)",
+          });
+          toast.success("Connection successful!");
+        } else if (response.status >= 200 && response.status < 500) {
+          // Any client or success response means the server is reachable
+          setTestResult({
+            success: true,
+            message: "Connected to chat completions endpoint!",
+          });
+          toast.success("Connection successful!");
+        } else {
+          setTestResult({
+            success: false,
+            message: `Server error: HTTP ${response.status}`,
+          });
+          toast.error(`Server error: HTTP ${response.status}`);
+        }
+      } catch (error: any) {
+        let message = "Connection failed: ";
+        if (error.name === "AbortError") {
+          message += "Request timeout (5s)";
+        } else if (error.message?.includes("Failed to fetch")) {
+          message += "Could not reach server. Check if it's running.";
+        } else {
+          message += error.message || "Unknown error";
+        }
+        setTestResult({ success: false, message });
+        toast.error(message);
+      } finally {
+        setIsTesting(false);
+      }
+      return;
+    }
+
+    // Original models endpoint test for non-bypass mode
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -294,64 +379,109 @@ export default function ApiSettings({
               )}
             </div>
 
-            {/* Model Selection - Show only after successful connection */}
-            {(models.length > 0 || isLoadingModels || modelsError) && (
-              <div className="space-y-2 border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="model-select" className="text-xs">
-                    Model Selection
-                  </Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => fetchModels(true)}
-                    disabled={isLoadingModels || !chatOptions.apiUrl}
-                    className="h-6 px-2"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-                
-                {isLoadingModels ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading models...
-                  </div>
-                ) : modelsError ? (
-                  <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-md">
-                    <ExclamationTriangleIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-                    <p className="text-xs text-red-600 dark:text-red-400">{modelsError}</p>
-                  </div>
-                ) : models.length > 0 ? (
-                  <>
-                    <Select value={chatOptions.selectedModel || ""} onValueChange={handleModelChange}>
-                      <SelectTrigger className="w-full text-sm">
-                        <SelectValue placeholder="Select a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {models.map((model) => (
-                          <SelectItem key={model.id} value={model.id} className="text-sm">
-                            <div className="flex flex-col">
-                              <span>{model.id}</span>
-                              {model.owned_by && (
-                                <span className="text-xs text-muted-foreground">
-                                  by {model.owned_by}
-                                </span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {chatOptions.selectedModel && (
-                      <p className="text-xs text-muted-foreground">
-                        Current: {chatOptions.selectedModel}
-                      </p>
-                    )}
-                  </>
-                ) : null}
+            {/* Bypass Models Check Option */}
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="bypass-models-check"
+                  checked={chatOptions.bypassModelsCheck || false}
+                  onChange={handleBypassModelsCheckChange}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary"
+                />
+                <Label htmlFor="bypass-models-check" className="text-xs font-normal cursor-pointer">
+                  Bypass models endpoint check (manual model entry)
+                </Label>
               </div>
+              {chatOptions.bypassModelsCheck && (
+                <div className="flex items-start gap-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                  <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    Bypass mode enabled. Enter model name manually. The models endpoint will not be checked.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Model Selection - Different UI based on bypass mode */}
+            {chatOptions.bypassModelsCheck ? (
+              // Manual model entry when bypass is enabled
+              <div className="space-y-2">
+                <Label htmlFor="manual-model" className="text-xs">
+                  Model Name (Manual Entry)
+                </Label>
+                <Input
+                  id="manual-model"
+                  type="text"
+                  placeholder="e.g., gpt-3.5-turbo, llama-2-7b"
+                  value={chatOptions.selectedModel || ""}
+                  onChange={handleManualModelChange}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the exact model name your API expects
+                </p>
+              </div>
+            ) : (
+              // Original model selection dropdown when bypass is disabled
+              (models.length > 0 || isLoadingModels || modelsError) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="model-select" className="text-xs">
+                      Model Selection
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => fetchModels(true)}
+                      disabled={isLoadingModels || !chatOptions.apiUrl}
+                      className="h-6 px-2"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+                  
+                  {isLoadingModels ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading models...
+                    </div>
+                  ) : modelsError ? (
+                    <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-md">
+                      <ExclamationTriangleIcon className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
+                      <p className="text-xs text-red-600 dark:text-red-400">{modelsError}</p>
+                    </div>
+                  ) : models.length > 0 ? (
+                    <>
+                      <Select value={chatOptions.selectedModel || ""} onValueChange={handleModelChange}>
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {models.map((model) => (
+                            <SelectItem key={model.id} value={model.id} className="text-sm">
+                              <div className="flex flex-col">
+                                <span>{model.id}</span>
+                                {model.owned_by && (
+                                  <span className="text-xs text-muted-foreground">
+                                    by {model.owned_by}
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {chatOptions.selectedModel && (
+                        <p className="text-xs text-muted-foreground">
+                          Current: {chatOptions.selectedModel}
+                        </p>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              )
             )}
 
             {/* Advanced Settings */}
@@ -444,6 +574,16 @@ export default function ApiSettings({
                 <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
                 <p className="text-xs text-yellow-600 dark:text-yellow-400">
                   API URL is required for chat functionality
+                </p>
+              </div>
+            )}
+            {chatOptions.apiUrl && !chatOptions.selectedModel && (
+              <div className="flex items-start gap-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                  {chatOptions.bypassModelsCheck 
+                    ? "Please enter a model name to use for chat"
+                    : "Please select a model or test connection to fetch available models"}
                 </p>
               </div>
             )}

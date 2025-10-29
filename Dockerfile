@@ -20,7 +20,8 @@ RUN sed -Ei \
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV VLLM_URL=""
+ENV VLLM_URL="http://localhost:9999"
+ENV VLLM_MODEL="gemini-flash"
 ENV VLLM_API_KEY=""
 
 # Copy the rest of the application files
